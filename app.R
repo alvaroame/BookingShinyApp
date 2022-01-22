@@ -1,24 +1,28 @@
 library(shiny)
 library(shinyWidgets)
-library('tidyverse')
-library('ggplot2')
-
-
+library(tidyverse)
+library(ggplot2)
 
 #Establecemos nuestro directorio de trabajo
 getwd()
 setwd('C:\\UPM\\BookingShinyApp')
 
-data = read.csv('data\\hotel_bookings.csv')
+df = read.csv('data\\hotel_bookings.csv')
 
 #convert to factor (categorical)
 df$hotel=as.factor(df$hotel)
+df$is_canceled=as.factor(df$is_canceled)
 df$arrival_date_month=factor(df$arrival_date_month, levels = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ))
 df$arrival_date_day_of_month=as.factor(df$arrival_date_day_of_month)
 
 #We create new quantitative variables
 df$guests <- df$adults + df$children + df$babies
 df$nights <- df$stays_in_weekend_nights + df$stays_in_week_nights
+
+#Reservation with guests
+df <- filter(df, guests > 0)
+#Reservation with nights
+df <- filter(df, nights > 0)
 
 df.heatmap <- subset(df, select= c(hotel, arrival_date_year, arrival_date_month, arrival_date_day_of_month, is_canceled, guests, nights))
 
@@ -75,7 +79,8 @@ ui <- fluidPage(
         br(),
         h4("Heatmap plot"),
         p("With this tool the analyst can explore the distribution over the year"),
-        plotOutput("scattPlot"),
+        plotOutput("heatPlot", click = "scatt_click"),
+        tableOutput("tablePlot"),
         p(),
         br(),
         
@@ -83,11 +88,9 @@ ui <- fluidPage(
     )
   )
   # Define server logic ----
-  server <- function(input, output) {
+  server <- function(input, output, session) {
     
-    # heatmap 
-    output$scattPlot <- renderPlot({
-      
+    getHeatMapData <- reactive({
       #for hotel
       dataHeatMap <- switch(input$hotel, 
                             "City Hotel" = filter(df.heatmap, hotel == "City Hotel"),
@@ -96,10 +99,10 @@ ui <- fluidPage(
       
       #for one year
       dataHeatMap <- switch(input$year, 
-                     "2015" = filter(dataHeatMap, arrival_date_year == 2015),
-                     "2016" = filter(dataHeatMap, arrival_date_year == 2016),
-                     "2017" = filter(dataHeatMap, arrival_date_year == 2017),
-                     "All" = dataHeatMap)
+                            "2015" = filter(dataHeatMap, arrival_date_year == 2015),
+                            "2016" = filter(dataHeatMap, arrival_date_year == 2016),
+                            "2017" = filter(dataHeatMap, arrival_date_year == 2017),
+                            "All" = dataHeatMap)
       
       #not cancelled
       dataHeatMap <- switch(input$cancelled, 
@@ -107,21 +110,34 @@ ui <- fluidPage(
                             "Not Cancelled" = filter(dataHeatMap, is_canceled == 0),
                             "All" = dataHeatMap)
       
+      
       print(input$hotel)
       print(input$year)
       print(input$cancelled)
       print(input$score)
-      if (input$score == "Guests"){
-        #ggplot(dataHeatMap, aes(x = arrival_date_day_of_month, y = arrival_date_month, fill = guests)) + geom_tile() + scale_fill_gradient(low = "white", high = "steelblue")
-        ggplot(dataHeatMap, aes(x = arrival_date_day_of_month, y = arrival_date_month, fill = guests)) + geom_tile() + scale_fill_gradient(low = "white", high = "red")
-        #ggplot(dataHeatMap, aes(x = arrival_date_day_of_month, y = arrival_date_month, fill = guests)) + geom_tile() + scale_fill_gradient2()
-      }else {
-        ggplot(dataHeatMap, aes(x = arrival_date_day_of_month, y = arrival_date_month, fill = nights)) + geom_tile() + scale_fill_gradient(low = "white", high = "steelblue")
-      }
       
+      #we sum-up totals
+      df.heatmap.totals <- dataHeatMap %>% 
+        group_by(arrival_date_month, arrival_date_day_of_month) %>% 
+        summarise(guests = sum(guests), nights = sum(nights))
       
-      
-      
+      df.heatmap.totals
+    })
+    
+    # heatmap 
+    output$heatPlot <- renderPlot({
+      dataHeatMap <- getHeatMapData()
+      #we plot the heatmap
+      heatMapPlot <- ggplot(dataHeatMap, aes_string(x = 'arrival_date_day_of_month', y = 'arrival_date_month', fill = tolower(input$score))) +
+        geom_tile() + 
+        scale_fill_gradient(low = "white", high = "steelblue")
+      heatMapPlot
+    })
+    
+    # Plot selected datapoint
+    output$tablePlot <- renderTable({
+      data <- getHeatMapData()
+      near = nearPoints(data, input$scatt_click)
     })
     
   }
