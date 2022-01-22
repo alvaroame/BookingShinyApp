@@ -2,6 +2,7 @@ library(shiny)
 library(shinyWidgets)
 library(tidyverse)
 library(ggplot2)
+library(plotly)
 
 #Establecemos nuestro directorio de trabajo
 getwd()
@@ -25,6 +26,7 @@ df <- filter(df, guests > 0)
 df <- filter(df, nights > 0)
 
 df.heatmap <- subset(df, select= c(hotel, arrival_date_year, arrival_date_month, arrival_date_day_of_month, is_canceled, guests, nights))
+colnames(df.heatmap)=c("hotel","Year","Month","Day","is_canceled","guests","nights")
 
 years <- unique(df$arrival_date_year)
 
@@ -79,8 +81,7 @@ ui <- fluidPage(
         br(),
         h4("Heatmap plot"),
         p("With this tool the analyst can explore the distribution over the year"),
-        plotOutput("heatPlot", click = "scatt_click"),
-        tableOutput("tablePlot"),
+        plotlyOutput("heatPlot"),
         p(),
         br(),
         
@@ -99,9 +100,9 @@ ui <- fluidPage(
       
       #for one year
       dataHeatMap <- switch(input$year, 
-                            "2015" = filter(dataHeatMap, arrival_date_year == 2015),
-                            "2016" = filter(dataHeatMap, arrival_date_year == 2016),
-                            "2017" = filter(dataHeatMap, arrival_date_year == 2017),
+                            "2015" = filter(dataHeatMap, Year == 2015),
+                            "2016" = filter(dataHeatMap, Year == 2016),
+                            "2017" = filter(dataHeatMap, Year == 2017),
                             "All" = dataHeatMap)
       
       #not cancelled
@@ -118,26 +119,27 @@ ui <- fluidPage(
       
       #we sum-up totals
       df.heatmap.totals <- dataHeatMap %>% 
-        group_by(arrival_date_month, arrival_date_day_of_month) %>% 
+        group_by(Month, Day) %>% 
         summarise(guests = sum(guests), nights = sum(nights))
+      
+      #text for tooltip
+      df.heatmap.totals <- df.heatmap.totals %>%
+        mutate(text = paste0(Month, " ", Day, "\n",
+                             "Guests: ", guests, "\n", 
+                             "Nights: ", nights, "\n"))
       
       df.heatmap.totals
     })
     
     # heatmap 
-    output$heatPlot <- renderPlot({
+    output$heatPlot <- renderPlotly({
       dataHeatMap <- getHeatMapData()
       #we plot the heatmap
-      heatMapPlot <- ggplot(dataHeatMap, aes_string(x = 'arrival_date_day_of_month', y = 'arrival_date_month', fill = tolower(input$score))) +
+      heatMapPlot <- ggplot(dataHeatMap, aes_string(x = 'Day', y = 'Month', fill = tolower(input$score), text='text')) +
         geom_tile() + 
-        scale_fill_gradient(low = "white", high = "steelblue")
-      heatMapPlot
-    })
-    
-    # Plot selected datapoint
-    output$tablePlot <- renderTable({
-      data <- getHeatMapData()
-      near = nearPoints(data, input$scatt_click)
+        scale_fill_gradient(low = "white", high = "steelblue") +
+        theme_light() 
+      plotly <- ggplotly(heatMapPlot, tooltip="text")
     })
     
   }
