@@ -7,9 +7,9 @@ library(streamgraph)
 
 #Establecemos nuestro directorio de trabajo
 getwd()
-setwd('C:\\UPM\\BookingShinyApp')
+#setwd('C:\\UPM\\BookingShinyApp')
 
-df = read.csv('data\\hotel_bookings.csv')
+df = read.csv('data/hotel_bookings.csv')
 
 #convert to factor (categorical)
 df$hotel=as.factor(df$hotel)
@@ -293,7 +293,7 @@ ui <- navbarPage(
       # plotly <- ggplotly(scatterPlot)
       
       fig <- plot_ly(
-        scatterData, x = ~nights, y = ~lead_time,
+        scatterData, x = ~lead_time, y = ~nights,
         text = ~paste("Guests: ", guests,
                       '<br>Date:', paste(Day, Month, Year, sep="-")),
         color = ~hotel, size = ~guests
